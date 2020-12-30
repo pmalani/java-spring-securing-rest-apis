@@ -4,6 +4,7 @@ import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PostFilter;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.annotation.CurrentSecurityContext;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
@@ -55,7 +56,7 @@ public class ResolutionController {
 		return this.resolutions.save(resolution);
 	}
 
-	@PutMapping(path="/resolution/{id}/revise")
+	@PutMapping(path = "/resolution/{id}/revise")
 	@Transactional
 	@PreAuthorize("hasAnyAuthority('resolution:write')")
 	@PostAuthorize("@post.authorize(#root)")
@@ -71,5 +72,22 @@ public class ResolutionController {
 	public Optional<Resolution> complete(@PathVariable("id") UUID id) {
 		this.resolutions.complete(id);
 		return read(id);
+	}
+
+	@PreAuthorize("hasAnyAuthority('resolution:share')")
+	@PostAuthorize("@post.authorize(#root)")
+	@PutMapping("/resolution/{id}/share")
+	@Transactional
+	public Optional<Resolution> share(@AuthenticationPrincipal User user, @PathVariable("id") UUID id) {
+		Optional<Resolution> resolution = read(id);
+		resolution
+				.filter(r -> r.getOwner().equals(user.username))
+				.map(Resolution::getText)
+				.ifPresent(text -> {
+					for (User friend : user.getFriends()) {
+						make(friend.username, text);
+					}
+				});
+		return resolution;
 	}
 }
